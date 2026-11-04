@@ -1,0 +1,4 @@
+FROM apache/spark:3.5.1-python3
+USER root
+RUN pip3 install --no-cache-dir numpy
+USER spark

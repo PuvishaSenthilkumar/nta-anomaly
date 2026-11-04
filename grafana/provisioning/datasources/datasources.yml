@@ -1,0 +1,23 @@
+apiVersion: 1
+datasources:
+  - name: Elasticsearch (NTA flows)
+    uid: es-nta
+    type: elasticsearch
+    access: proxy
+    url: http://elasticsearch:9200
+    database: "nta-flows-*"
+    isDefault: true
+    jsonData:
+      timeField: "@timestamp"
+      esVersion: "8.0.0"
+      logMessageField: severity
+      maxConcurrentShardRequests: 5
+
+  - name: Cassandra (NTA)
+    uid: cass-nta
+    type: hadesarchitect-cassandra-datasource
+    access: proxy
+    url: cassandra:9042
+    jsonData:
+      keyspace: nta
+      consistency: ONE

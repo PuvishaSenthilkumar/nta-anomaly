@@ -1,0 +1,2 @@
+# Host-side only (Kafka producer). Spark/Hadoop deps live in the containers.
+kafka-python==2.0.2

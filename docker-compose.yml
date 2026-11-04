@@ -1,0 +1,157 @@
+name: nta
+
+# ---------------------------------------------------------------------------
+# Network Traffic Analytics & Anomaly Detection - single-node demo stack
+# Hadoop (HDFS+YARN) | Kafka (KRaft) | Cassandra | Spark | ELK | Grafana
+# Needs roughly 10-12 GB RAM free for Docker.
+# ---------------------------------------------------------------------------
+
+x-hadoop: &hadoop
+  build: ./hadoop
+  image: nta-hadoop:3.3.6
+  env_file: ./hadoop/hadoop.env
+  networks: [nta]
+
+services:
+  # ---------------- Hadoop: HDFS + YARN ----------------
+  namenode:
+    <<: *hadoop
+    hostname: namenode
+    command: ["hdfs", "namenode"]
+    ports: ["9870:9870"]
+    environment:
+      ENSURE_NAMENODE_DIR: /tmp/hadoop-root/dfs/name
+
+  datanode:
+    <<: *hadoop
+    hostname: datanode
+    command: ["hdfs", "datanode"]
+    depends_on: [namenode]
+
+  resourcemanager:
+    <<: *hadoop
+    hostname: resourcemanager
+    command: ["yarn", "resourcemanager"]
+    ports: ["8088:8088"]
+    depends_on: [namenode]
+
+  nodemanager:
+    <<: *hadoop
+    hostname: nodemanager
+    command: ["yarn", "nodemanager"]
+    depends_on: [resourcemanager]
+
+  # ---------------- Kafka (single node, KRaft - no ZooKeeper) ----------------
+  kafka:
+    image: apache/kafka:3.8.0
+    hostname: kafka
+    networks: [nta]
+    ports: ["29092:29092"]          # host access for kafka/producer.py
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+
+  # ---------------- Cassandra (NoSQL serving store) ----------------
+  cassandra:
+    image: cassandra:4.1
+    hostname: cassandra
+    networks: [nta]
+    ports: ["9042:9042"]
+    environment:
+      MAX_HEAP_SIZE: 1G
+      HEAP_NEWSIZE: 256M
+    volumes: [cassandra-data:/var/lib/cassandra]
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'describe keyspaces' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  cassandra-init:
+    image: cassandra:4.1
+    networks: [nta]
+    depends_on:
+      cassandra: { condition: service_healthy }
+    volumes: ["./cassandra/schema.cql:/schema.cql:ro"]
+    command: ["cqlsh", "cassandra", "-f", "/schema.cql"]
+    restart: "no"
+
+  # ---------------- Spark (PySpark driver, local[*]) ----------------
+  spark:
+    build: ./spark-image
+    image: nta-spark:3.5.1
+    hostname: spark
+    networks: [nta]
+    command: ["sleep", "infinity"]
+    environment:
+      HDFS_URI: hdfs://namenode:8020
+      KAFKA_BOOTSTRAP: kafka:9092
+      CASSANDRA_HOST: cassandra
+    volumes:
+      - ./spark:/opt/nta/spark:ro
+    ports: ["4040:4040"]
+    depends_on: [namenode, kafka, cassandra]
+
+  # ---------------- ELK ----------------
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    networks: [nta]
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms1g -Xmx1g
+    ports: ["9200:9200"]
+    volumes: [es-data:/usr/share/elasticsearch/data]
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.13.4
+    networks: [nta]
+    environment:
+      LS_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+    depends_on: [elasticsearch, kafka]
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.4
+    networks: [nta]
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports: ["5601:5601"]
+    depends_on: [elasticsearch]
+
+  # ---------------- Grafana ----------------
+  grafana:
+    image: grafana/grafana:10.4.2
+    networks: [nta]
+    environment:
+      GF_INSTALL_PLUGINS: hadesarchitect-cassandra-datasource
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/nta.json
+    ports: ["3000:3000"]
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on: [elasticsearch, cassandra]
+
+networks:
+  nta:
+
+volumes:
+  cassandra-data:
+  es-data:
+  grafana-data:
