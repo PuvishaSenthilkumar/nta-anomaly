@@ -6,6 +6,7 @@ from pyspark.sql import functions as F
 
 from common import ALL_COLS, CURATED_DIR, FLOW_SCHEMA, RAW_DIR, get_spark
 
+
 FILES = {
     "train": f"{RAW_DIR}/UNSW_NB15_training-set.csv",
     "test": f"{RAW_DIR}/UNSW_NB15_testing-set.csv",

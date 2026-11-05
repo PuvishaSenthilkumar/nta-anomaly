@@ -1,2 +1,11 @@
-# Host-side only (Kafka producer). Spark/Hadoop deps live in the containers.
+# Host-side dependencies for the UNSW-NB15 Intrusion Detection integration
+# Flask for prediction API endpoints
+flask==3.0.3
+
+# Model loading and prediction
+joblib==1.4.0
+pandas==2.3.3
+numpy==2.3.4
+
+# Original dependencies
 kafka-python==2.0.2

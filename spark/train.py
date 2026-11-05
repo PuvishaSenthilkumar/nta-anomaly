@@ -2,9 +2,9 @@
 
   1. Supervised  : Random Forest vs Gradient-Boosted Trees (binary label) -> best by AUC-ROC
   2. Unsupervised: KMeans fitted on NORMAL traffic only; distance to the nearest centroid is the
-                   anomaly score; threshold = 99th percentile of that distance on normal training flows.
-                   This catches traffic that "doesn't look normal" even when the classifier has never
-                   seen that attack type.
+                 anomaly score; threshold = 99th percentile of that distance on normal training flows.
+                 This catches traffic that "doesn't look normal" even when the classifier has never
+                 seen that attack type.
 
     spark-submit train.py [--k 8] [--trees 100]
 """

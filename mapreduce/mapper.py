@@ -2,7 +2,7 @@
 """Hadoop Streaming mapper for UNSW-NB15 flow records (training/testing-set CSV layout).
 
 Emits one line per flow:  <key> \t 1 \t label \t sbytes \t dbytes \t dur
-where <key> is built from the columns named on the command line (default: attack_cat proto),
+where <key> is built from the columns named on the command line (default: attack_cat|proto),
 joined with '|'.
 
     mapper.py                    -> key = attack_cat|proto
@@ -19,6 +19,7 @@ COLS = [
     "ct_src_dport_ltm", "ct_dst_sport_ltm", "ct_dst_src_ltm", "is_ftp_login", "ct_ftp_cmd",
     "ct_flw_http_mthd", "ct_src_ltm", "ct_srv_dst", "is_sm_ips_ports", "attack_cat", "label",
 ]
+
 IDX = {c: i for i, c in enumerate(COLS)}
 
 
