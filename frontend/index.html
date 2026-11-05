@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Traffic Analytics - Intrusion Detection</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #34495e;
+            --accent: #e74c3c;
+            --success: #27ae60;
+            --bg: #f4f6f8;
+            --card: #ffffff;
+            --text: #2c3e50;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        h1, h2, h3 {
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: var(--primary);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 8px 8px 0 0;
+            margin: -20px -20px 20px;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+        }
+
+        .header p {
+            opacity: 0.8;
+            font-size: 0.9rem;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .card h2 {
+            color: var(--primary);
+            margin-bottom: 20px;
+            font-size: 1.2rem;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .status-healthy {
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        .status-unhealthy {
+            color: var(--accent);
+            font-weight: bold;
+        }
+
+        .prediction-box {
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+        }
+
+        .prediction-normal {
+            background: #d5f5e3;
+            border: 2px solid var(--success);
+        }
+
+        .prediction-attack {
+            background: #fae8e7;
+            border: 2px solid var(--accent);
+        }
+
+        .prediction-label {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+
+        .prediction-confidence {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .prediction-message {
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        .api-status {
+            background: #e8f4fd;
+            border: 1px solid #b3d8e;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .api-status.healthy {
+            border-color: var(--success);
+            background: #d5f5e3;
+        }
+
+        .api-status.unhealthy {
+            border-color: var(--accent);
+            background: #fae8e7;
+        }
+
+        .feature-row {
+            margin-bottom: 10px;
+        }
+
+        .feature-row label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+
+        .feature-row input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        .feature-row input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(44, 62, 80, 0.1);
+        }
+
+        .btn-predict {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 15px;
+            transition: background 0.3s;
+        }
+
+        .btn-predict:hover {
+            background: #1f2634;
+        }
+
+        .btn-predict:disabled {
+            background: #7f8c8d;
+            cursor: not-allowed;
+        }
+
+        .history-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        .history-attack {
+            border-left: 3px solid var(--accent);
+        }
+
+        .history-normal {
+            border-left: 3px solid var(--success);
+        }
+
+        .spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid var(--primary);
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto 0;
+            display: none;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading .spinner {
+            display: block;
+        }
+
+        .loading .btn-predict {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        @media (max-width: 600px) {
+            .row {
+                grid-template-columns: 1fr;
+            }
+            .container {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Network Traffic Analytics</h1>
+            <p>Intrusion Detection & Classification</p>
+        </div>
+
+        <div class="card" id="healthCard">
+            <h2>API Status</h2>
+            <div class="api-status unhealthy" id="apiStatus">
+                Checking connection...
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Traffic Classification</h2>
+            <form id="predictForm">
+                <div class="row">
+                    <div class="feature-row">
+                        <label>Duration (dur)</label>
+                        <input type="number" id="dur" step="any" placeholder="e.g., 0.5">
+                    </div>
+                    <div class="feature-row">
+                        <label>Protocol (proto)</label>
+                        <input type="text" id="proto" placeholder="e.g., tcp">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="feature-row">
+                        <label>Service (service)</label>
+                        <input type="text" id="service" placeholder="e.g., http">
+                    </div>
+                    <div class="feature-row">
+                        <label>State (state)</label>
+                        <input type="text" id="state" placeholder="e.g., FIN">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="feature-row">
+                        <label>Source Packets (spkts)</label>
+                        <input type="number" id="spkts" step="1" placeholder="e.g., 5">
+                    </div>
+                    <div class="feature-row">
+                        <label>Dest Packets (dpkts)</label>
+                        <input type="number" id="dpkts" step="1" placeholder="e.g., 5">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="feature-row">
+                        <label>Source Bytes (sbytes)</label>
+                        <input type="number" id="sbytes" step="any" placeholder="e.g., 500">
+                    </div>
+                    <div class="feature-row">
+                        <label>Dest Bytes (dbytes)</label>
+                        <input type="number" id="dbytes" step="any" placeholder="e.g., 600">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="feature-row">
+                        <label>Rate</label>
+                        <input type="number" id="rate" step="any" placeholder="e.g., 0.01">
+                    </div>
+                    <div class="feature-row">
+                        <label>TTL (sttl)</label>
+                        <input type="number" id="sttl" placeholder="e.g., 62">
+                    </div>
+                </div>
+                <button type="submit" class="btn-predict" id="predictBtn">Predict Classification</button>
+            </form>
+        </div>
+
+        <div class="card" id="resultCard" style="display: none;">
+            <h2>Prediction Result</h2>
+            <div class="prediction-box" id="predictionBox">
+                <div class="prediction-label" id="predictionLabel">...</div>
+                <div class="prediction-confidence" id="confidence">...</div>
+                <div class="prediction-message" id="message">...</div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+            <h2>Traffic History</h2>
+            <div id="historyList" style="max-height: 200px; overflow-y: auto; font-size: 0.85rem;">
+                <div style="text-align: center; color: #666; padding: 10px;">No predictions yet</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE = 'http://localhost:5000/api';
+        const featuresNeeded = [
+            'dur', 'proto', 'service', 'state', 'spkts', 'dpkts', 'sbytes', 'dbytes', 
+            'rate', 'sttl', 'dttl', 'sload', 'dload', 'sinpkt', 'dinpkt', 'sjit', 
+            'djit', 'swin', 'stcpb', 'dtcpb', 'dwin', 'tcprtt', 'synack', 'ackdat',
+            'smean', 'dmean', 'trans_depth', 'response_body_len', 'ct_srv_src', 
+            'ct_state_ttl', 'ct_dst_ltm', 'ct_src_dport_ltm', 'ct_dst_sport_ltm', 
+            'ct_dst_src_ltm', 'is_ftp_login', 'ct_ftp_cmd', 'ct_flw_http_mthd', 
+            'ct_src_ltm', 'ct_srv_dst', 'is_sm_ips_ports'
+        ];
+
+        let predictionHistory = [];
+
+        // DOM Elements
+        const healthStatus = document.getElementById('apiStatus');
+        const predictForm = document.getElementById('predictForm');
+        const predictBtn = document.getElementById('predictBtn');
+        const resultCard = document.getElementById('resultCard');
+        const predictionBox = document.getElementById('predictionBox');
+        const predictionLabel = document.getElementById('predictionLabel');
+        const confidenceEl = document.getElementById('confidence');
+        const messageEl = document.getElementById('message');
+        const historyList = document.getElementById('historyList');
+
+        // Check API health on load
+        async function checkHealth() {
+            try {
+                const resp = await fetch('/api/health');
+                const data = await resp.json();
+                
+                if (data.status === 'healthy' && data.model_loaded) {
+                    healthStatus.innerHTML = `<div class="api-status healthy">✅ API Connected - Model Loaded</div>`;
+                    predictBtn.disabled = false;
+                } else {
+                    healthStatus.innerHTML = `<div class="api-status unhealthy">⚠️ API Issues</div>`;
+                    predictBtn.disabled = true;
+                }
+            } catch (error) {
+                healthStatus.innerHTML = `<div class="api-status unhealthy">❌ Connection Failed</div>`;
+                healthStatus.innerHTML += `<div style="font-size: 0.8rem; margin-top: 5px;">Is the Flask server running on port 5000?</div>`;
+                predictBtn.disabled = true;
+            }
+        }
+
+        // Predict function
+        async function predictTraffic(e) {
+            e.preventDefault();
+            
+            // Disable button and show spinner
+            predictBtn.disabled = true;
+            predictBtn.innerHTML = '<span class="spinner"></span> Predicting...';
+            
+            // Build features object from form
+            const features = {};
+            featuresNeeded.forEach(feature => {
+                const input = document.getElementById(feature);
+                const val = input.value;
+                features[feature] = val !== '' ? parseFloat(val) : 0;
+            });
+
+            try {
+                const resp = await fetch('/api/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(features),
+                });
+
+                const result = await resp.json();
+                
+                // Show result
+                showPrediction(result);
+                
+                // Add to history
+                addToHistory(result);
+                
+            } finally {
+                predictBtn.disabled = false;
+                predictBtn.innerHTML = 'Predict Classification';
+            }
+        }
+
+        // Show prediction result
+        function showPrediction(result) {
+            // Hide health card, show result card
+            document.getElementById('healthCard').style.display = 'none';
+            resultCard.style.display = 'block';
+            
+            // Set prediction label and styling
+            const label = document.getElementById('predictionLabel');
+            const confidence = document.getElementById('confidence');
+            const message = document.getElementById('message');
+            const predictionBox = document.getElementById('predictionBox');
+            
+            if (result.success) {
+                const predClass = result.prediction === 1 ? 'prediction-attack' : 'prediction-normal';
+                predictionBox.className = `prediction-box ${predClass}`;
+                predictionLabel.innerHTML = `<span class="prediction-label">${result.classification}</span>${result.prediction}`;
+                confidence.innerHTML = `<span class="prediction-confidence">Confidence: ${result.confidence}</span>`;
+                message.innerHTML = `<span class="prediction-message">${result.message}</span>`;
+            } else {
+                predictionBox.className = 'prediction-box prediction-attack';
+                predictionLabel.innerHTML = 'Error';
+                confidence.innerHTML = `<span class="prediction-confidence">Error: ${result.error || 'Unknown'}</span>`;
+                message.innerHTML = `Failed to predict`;
+            }
+        }
+
+        // Add to history
+        function addToHistory(result) {
+            const historyItem = document.createElement('div');
+            historyItem.className = 'history-item';
+            
+            if (result.success && result.prediction === 1) {
+                historyItem.classList.add('history-attack');
+            } else if (result.success) {
+                historyItem.classList.add('history-normal');
+            }
+            
+            const time = new Date().toLocaleTimeString();
+            historyItem.innerHTML = `
+                <strong>${result.classification || 'Error'}</strong> (${result.confidence || 'N/A'}%) - ${time}
+            `;
+            
+            historyList.insertBefore(historyItem, historyList.firstChild);
+            
+            // Keep only last 10 items
+            while (historyList.children.length > 10) {
+                historyList.removeChild(historyList.lastChild);
+            }
+        }
+
+        // Form submission
+        predictForm.addEventListener('submit', predictTraffic);
+
+        // Initialize on load
+        checkHealth();
+    </script>
+</body>
+</html>
